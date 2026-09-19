@@ -37,7 +37,7 @@ CHUNK_SIZE_WORDS = 200      # words per chunk
 CHUNK_OVERLAP_WORDS = 50    # words overlap between consecutive chunks
 TOP_K = 5                   # how many chunks to retrieve per question
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
 # Simple stopword list for the keyword search (kept tiny on purpose)
@@ -322,15 +322,25 @@ def ask_groq(question, retrieved_chunks):
 
     user_prompt = f"Context:\n{context_block}\n\nQuestion: {question}"
 
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.2,
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.2,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        # Common cause: GROQ_MODEL was deprecated/renamed on Groq's side.
+        # See https://console.groq.com/docs/models for the current list.
+        return (
+            "⚠️ Groq request failed. This is usually because the model name "
+            f"(`{GROQ_MODEL}`) is invalid or was deprecated. Check the current "
+            "model list at https://console.groq.com/docs/models and update "
+            f"GROQ_MODEL in app.py.\n\nDetails: {e}"
+        )
 
 
 # --------------------------------------------------------------------------
