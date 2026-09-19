@@ -346,10 +346,34 @@ def ask_groq(question, retrieved_chunks):
 # --------------------------------------------------------------------------
 # Google Drive loading (public file / folder links via gdown)
 # --------------------------------------------------------------------------
+def extract_drive_file_id(link):
+    """
+    Pull the file ID out of common Google Drive link formats, e.g.:
+    - https://drive.google.com/file/d/<ID>/view?usp=sharing
+    - https://drive.google.com/open?id=<ID>
+    - https://drive.google.com/uc?id=<ID>
+    Returns None if no ID pattern is found (link might already be an ID).
+    """
+    patterns = [
+        r"/file/d/([a-zA-Z0-9_-]+)",
+        r"[?&]id=([a-zA-Z0-9_-]+)",
+        r"/d/([a-zA-Z0-9_-]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, link)
+        if match:
+            return match.group(1)
+    return None
+
+
 def load_from_google_drive(link):
     """
     Download a public Google Drive file or folder link into a temp folder,
     then return a list of (path, filename, file_hash) for supported files.
+
+    Note: we deliberately avoid gdown's `fuzzy=True` argument, since older
+    gdown versions don't support it. Instead we extract the file ID
+    ourselves with a regex, which works across gdown versions.
     """
     import gdown
 
@@ -363,7 +387,12 @@ def load_from_google_drive(link):
                 for f in files:
                     downloaded_paths.append(os.path.join(root, f))
         else:
-            out_path = gdown.download(url=link, output=os.path.join(tmp_dir, ""), quiet=True, fuzzy=True)
+            file_id = extract_drive_file_id(link)
+            if file_id:
+                out_path = gdown.download(id=file_id, output=os.path.join(tmp_dir, ""), quiet=True)
+            else:
+                # fall back to treating the input as a direct download URL
+                out_path = gdown.download(url=link, output=os.path.join(tmp_dir, ""), quiet=True)
             if out_path:
                 downloaded_paths.append(out_path)
     except Exception as e:
